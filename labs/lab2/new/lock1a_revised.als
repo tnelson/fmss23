@@ -145,11 +145,14 @@ pred waitForAccess[t: Thread] {
 -------------------------------------------------------------------------
 
 -- The original delta function (Lock 1A)
-pred lock1a_Delta {
-   some t: Thread | {
+pred lock1a_Delta_t[t: Thread] {
       requestAccess[t] or
       grantAccess[t] or
       finishRequest[t]
+}
+pred lock1a_Delta {
+   some t: Thread | {
+	 lock1a_Delta_t[t]
    }
 }
 run lock1a_anyTrace {  
@@ -158,7 +161,7 @@ run lock1a_anyTrace {
 } expect 1
 
 -------------------------------------------------------------------------
--- The modified delta function (Lock 1B)
+-- The modified delta function (Lock 1B), for comparison
 pred lock1b_Delta {
    some t: Thread | {
       requestAccess[t] or
@@ -204,7 +207,10 @@ pred require_mutualExclusion_via_state {
 -- REQUIREMENT: Non-starvation (liveness)
 --   I am not separating out deadlock-freedom in this model, since 
 --   liveness ought to imply deadlock-freedom (this is a worthwhile
---   validation check!), and liveness is what we really want.
+--   validation check!), and liveness is what we really want. But also,
+--   note that we could not phrase the property as "some action is always
+--   enabled" anymore; by definition, some action _is_ always enabled in
+--   a trace satisfying the specification we wrote.
 
 -- There are multiple formulations here, too. But which is best?
 ---------------------------------------------------------------------
@@ -261,21 +267,100 @@ check requireNonStarvation_lock1b {
 }
 
 -------------------------------------------------------------------------
--- Model Validation   (checks involve S and D, but never R)
---   Including only checks for Lock 1A now.
+-- Model Validation   (involves S and/or D, but never R)
+--   Note that, by separating the specification from the domain,
+--   we can restrict the scope of each of the following predicates.
+--   Ask: "Is this concept I wish to check...
+--     - about the domain; or
+--     - about the specification?"
 -------------------------------------------------------------------------
 
--- Check that the transition system can produce traces at all
-run lock1a_tracesExist {
-  initialState and always lock1a_Delta 
+
+-------------------------------------------------------------------------
+-- Domain-specific predicates (optional domain knowledge) 
+-------------------------------------------------------------------------
+
+-- Note that the actions themselves are optional predicates. Here:
+--   finishRequest[t] 
+--   requestAccess[t]
+
+-- QUESTION: How do we categorize the checks/runs themselves? 
+--   The transition system being referenced by the Delta function
+--   involves actions that are invoked by both the domain and system.
+--   Yet this run is checking that an action invoked by the domain
+--   can be performed -- and so it feels analogous to just checking an
+--   optional domain-knowledge predicate by itself in a non-temporal model.
+
+run lock1a_threadCanRequestAccess {
+  initialState and always lock1a_Delta
+  some t: Thread | eventually { requestAccess[t] }   
 } expect 1
 
--- Check that the transition system can produce traces where both flags are raised at once)
-pred all_flags_simultaneously {
-  initialState always lock1a_Delta
-  eventually { all t: Thread | t.flag = True } 
+run lock1a_threadCanFinishRequest {
+  initialState and always lock1a_Delta
+  some t: Thread | eventually { finishRequest[t] }   
+} expect 1
+
+-- TODO: combinations of these
+
+-- The domain exhibits behavior where both threads never stop contending
+pred threadsContendContinuously {
+  all t: Thread | always eventually requestAccess[t]
 }
-run all_flags_simultaneously expect 1
+run traceWith_threadsContendContinuously {
+  initialState and always lock1a_Delta
+  threadsContendContinuously
+} expect 1
+
+
+
+-------------------------------------------------------------------------
+-- Behavioral predicates (optional specification) 
+-------------------------------------------------------------------------
+
+-- Note that the actions themselves are optional predicates. Here:
+--    grantAccess[t]
+--    waitForAccess[t]
+
+run lock1a_systemCanGrantAccess {
+  initialState and always lock1a_Delta
+  some t: Thread | eventually { grantAccess[t] }   
+}
+
+run lock1a_systemCanSayWait {
+  initialState and always lock1a_Delta
+  some t: Thread | eventually { waitForAccess[t] }   
+}
+
+-----------------------------------------------------------------------
+-- QUESTION: is fairness optional about the domain or the specification?
+--  It does seem behavioral, although if I let myself think of a scheduler
+--  in the domain, it's easy to get confused. I tend to think: "add fairness
+--  as domain knowledge that's necessary for the algorithm to work".
+pred lock1a_enabled_t[t: Thread] {
+      requestAccess_Enabled[t] or
+      grantAccess_Enabled[t] or
+      finishRequest_Enabled[t]
+}
+
+pred weakFairness {
+	all t: Thread { 
+      (eventually always lock1a_enabled_t[t]) implies 
+        (always eventually lock1a_Delta_t[t])
+    }
+}
+
+-----------------------------------------------------------------------
+
+-- TODO beyond this point: enumerate categories, more example predicates
+
+
+-- Check that the transition system can produce traces where both flags are raised at once)
+//pred all_flags_simultaneously {
+//  initialState always lock1a_Delta
+//  eventually { all t: Thread | t.flag = True } 
+//}
+//run all_flags_simultaneously expect 1
 
 
 
