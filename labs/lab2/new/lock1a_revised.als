@@ -101,7 +101,7 @@ pred requestAccess[t: Thread] {
 }
 
 ---------------------------------------------------------------------
--- ACTION: The thread's request is granted (invoked by locking system, executed by the thread)
+-- ACTION: The thread's request is granted (invoked by locking system)
 pred grantAccess_Enabled[t: Thread] {
    t.state = Waiting 
    all t": Thread - t | t".flag = False
@@ -291,6 +291,7 @@ check requireNonStarvation_lock1b {
 --   can be performed -- and so it feels analogous to just checking an
 --   optional domain-knowledge predicate by itself in a non-temporal model.
 
+
 run lock1a_threadCanRequestAccess {
   initialState and always lock1a_Delta
   some t: Thread | eventually { requestAccess[t] }   
@@ -307,6 +308,10 @@ run lock1a_threadCanFinishRequest {
 pred threadsContendContinuously {
   all t: Thread | always eventually requestAccess[t]
 }
+// Check sat of the optional domain-knowledge predicate
+run threadContendContinuously expect 1
+
+-- QUESTION: which category does this sort of combination get filed under?
 run traceWith_threadsContendContinuously {
   initialState and always lock1a_Delta
   threadsContendContinuously
