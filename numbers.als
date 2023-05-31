@@ -1,7 +1,22 @@
 /**
+	Model of knowledge puzzle from SSFM23
+    There are 3 people: A, B, and C.
+    There are 7 known cards, each containing one of the distinct natural 
+    numbers 1 through 7. These are dealt to the 3 people, who know their 
+    card(s) but not the card(s) of others. All people know _how many_ cards
+    everyone receives. 
+      - A draws 1 card; and
+      - B and C each draw 3 cards.
 
+    B says something openly to C (i.e., A can hear as well)
+    C then says something openly to B.
+    
+    At this point, B and C both know exactly who has each card. But A does not
+    know for certain who has *any* single card.
 
+    What did B and C say to each other?
 */
+
 abstract sig Card {}
 one sig Card1, Card2, Card3, Card4, Card5, Card6, Card7 extends Card {}
 
