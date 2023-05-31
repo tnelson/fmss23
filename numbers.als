@@ -17,8 +17,44 @@
     What did B and C say to each other?
 */
 
-abstract sig Card {}
+abstract sig Card {value: one Int}
 one sig Card1, Card2, Card3, Card4, Card5, Card6, Card7 extends Card {}
+
+/**
+  Notes on executing this model:
+
+  (1) Because there are 140 cards, the model is quite
+  close to running against Alloy/Kodkod's native "no more than MAXINT possible
+  tuples, before considering types" limitation. Running with 4 Int is, at the moment,
+  OK, but running with 7 Int is not.
+
+  (2) If you get a counterexample to a property, it may be hard to use the default 
+  visualization. Instead, use tree-view and page down until you see a relation 
+  starting with a dollar sign ($). This denotes the counterexample world. E.g., 
+  World_4_257_136 would denote that the assertion fails in a world where A drew 4
+  and B drew 2, 5, and 7. Then open the evaluator and use the `believesPossible` 
+  function to explore the failure. E.g., if C does not gain enough knowledge, ask:
+    believesPossible[BSpoke, World_4_257_136, C]
+  to discover which worlds C believes are possible after B speaks.
+*/
+
+-- NOTE WELL: if summing card values, requires ability to count to (5+6+7) = 18
+--   which is bitwidth = 6 ~~ interval [-32, 31]
+-- However, if phrasing this so that summing the actual values is avoided, the 
+--   viable bitwidth may be lower. E.g., if summing the _remainders_ modulo
+--   (say) 7, then worst case is (4+5+6) = 15, which needs only bitwidth = 5 ~~ [-16, 15]
+-- Further optimization is possible in this case by chaining single operations:
+--   ((((4 mod 7) + (5 mod 7)) mod 7) + (6 mod 7)) mod 7
+--   requires only counting to 7, which is bitwidth 4 ~~ [-8, 7] 
+fact cardValues {
+  Card1.value = 1
+  Card2.value = 2
+  Card3.value = 3
+  Card4.value = 4
+  Card5.value = 5
+  Card6.value = 6
+  Card7.value = 7
+}
 
 abstract sig Person {}
 one sig A, B, C extends Person {}
@@ -226,27 +262,65 @@ fun totalParity[w: World, p: Person]: Int {
   rem[#((Card1 + Card3 + Card5 + Card7) & w.holds[p]), 2]
 }
 
+-- NOTE WELL the comment above the value field declaration.
+-- This operation is carefully crafted to not require counting above M.
+-- ...there is almost certainly a more efficient way to do this.
+//fun sumModulo[w: World, p: Person, M: Int]: Int {
+//  let small  = {c : w.holds[p]                  | all other : w.holds[p] - c                  | other.value > c.value} |
+//  let middle = {c : w.holds[p] - small          | all other : w.holds[p] - c - small          | other.value > c.value} |
+//  let large  = {c : w.holds[p] - small - middle | all other : w.holds[p] - c - small - middle | other.value > c.value} |
+//    rem[add[rem[add[small.value, middle.value], 
+//                M], 
+//            large.value], 
+//        M]
+//}
+fun smallestCard[cards: set Card]: lone Card {
+	Card1 in cards => Card1 else
+    Card2 in cards => Card2 else
+	Card3 in cards => Card3 else
+	Card4 in cards => Card4 else
+	Card5 in cards => Card5 else
+	Card6 in cards => Card6 else
+	Card7
+}
+fun sumModulo[w: World, p: Person, M: Int]: Int {
+  let small  = smallestCard[w.holds[p]] | 
+  let middle = smallestCard[w.holds[p] - small] | 
+  let large  = smallestCard[w.holds[p] - middle - small] | 
+    rem[add[rem[add[small.value, middle.value], 
+                M], 
+            large.value], 
+        M]
+}
+
+
 fun believesPossible[s: State, inWorld: World, p: Person]: set World {
     s.possibleFrom[inWorld][p]
 }
 
+-- The change in knowledge after B speaks
 pred BSpeaks {
 	BSpoke.possibleFrom = Start.possibleFrom & 
 
     -- "The number of cards c in my hand that immediately succeed some other card in my hand is..."
-    {w: World, p: Person, w2: World | numberAdjacent[w, B] = numberAdjacent[w2, B]}
-    &
+    --{w: World, p: Person, w2: World | numberAdjacent[w, B] = numberAdjacent[w2, B]}
+
 	-- "The total parity of my cards is..."
-	{w: World, p: Person, w2: World | totalParity[w, B] = totalParity[w2, B]}
+	--{w: World, p: Person, w2: World | totalParity[w, B] = totalParity[w2, B]}
+
+    -- "The sum of my cards modulo 7 is..."
+	{w: World, p: Person, w2: World | sumModulo[w, B, 7] = sumModulo[w2, B, 7]}
 
 }
+
+-- The change in knowledge after C speaks
 pred CSpeaks {
     -- say nothing (YET) in 2nd round
 	BSpoke.possibleFrom = BothSpoke.possibleFrom
 }
 
 run {baseKnowledge and BSpeaks and CSpeaks} 
-  for exactly 3 State, exactly 7 Card, exactly 140 World
+  for exactly 3 State, exactly 7 Card, exactly 140 World, 4 Int
   expect 1
 
 /********************************************************************
@@ -264,7 +338,7 @@ assert knowledge_is_consistent_with_reality {
 	}
 }
 check knowledge_is_consistent_with_reality 
-  for exactly 3 State, exactly 7 Card, exactly 140 World
+  for exactly 3 State, exactly 7 Card, exactly 140 World, 4 Int
 
 -- Requirement: C has learned who has all numbers after both speak
 assert req_C_knows_numbers {
@@ -274,7 +348,7 @@ assert req_C_knows_numbers {
     }
 }
 check req_C_knows_numbers 
-  for exactly 3 State, exactly 7 Card, exactly 140 World
+  for exactly 3 State, exactly 7 Card, exactly 140 World, 4 Int
 
 -- Requirement: B has learned who has all numbers after both speak
 assert req_B_knows_numbers {
@@ -284,7 +358,7 @@ assert req_B_knows_numbers {
     }
 }
 check req_B_knows_numbers 
-  for exactly 3 State, exactly 7 Card, exactly 140 World
+  for exactly 3 State, exactly 7 Card, exactly 140 World, 4 Int
 
 -- Requirement: even after both speak, A does not know for certain who
 -- holds each card. That is, while A's knowledge may grow, it remains the
@@ -295,10 +369,10 @@ assert req_A_knows_no_numbers {
 	all w: World, c: Card | {
         -- there is uncertainty for this card if the real situation is world w
 		some disj possw1, possw2: BothSpoke.possibleFrom[w][A] | {
-            possw1.holds[c] = B and possw2.holds[c] = C
+            c in possw1.holds[B] and c in possw2.holds[C]
         }
     }
 }
 check req_A_knows_no_numbers 
-  for exactly 3 State, exactly 7 Card, exactly 140 World
+  for exactly 3 State, exactly 7 Card, exactly 140 World, 4 Int
 
