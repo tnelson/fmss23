@@ -31,15 +31,17 @@ def flatten(l: list[list[T]]) -> list[T]:
 def atom(w: dict[str, list[str]]) -> str:
     return f'World_{"".join(w["A"])}_{"".join(w["B"])}_{"".join(w["C"])}'
 def holds(w: dict[str, list[str]]) -> str:
-    return ' + '.join(['+'.join([f'{k}->Card{num}' for num in w[k]]) for k in w.keys()])
+    return ' + '.join(['+'.join([f'{atom(w)}->{k}->Card{num}' for num in w[k]]) for k in w.keys()])
 
 if __name__ == '__main__':    
     worlds = pick_from(start_deck, quotas)
     atoms = [atom(w) for w in worlds]
-    #print(f'World = {" + ".join(atoms)}')
+    print('\n\n\n\n\n\n\n\n')
     print(f'one sig {",".join(atoms)} extends World ')
-    for w in worlds:
-        print(f'{atom(w)}.holds = {holds(w)}')
+    print('holds = ')
+    per_world_holds = [f'{holds(w)}' for w in worlds]
+    print("+\n".join(per_world_holds))
+        
 
 
 
